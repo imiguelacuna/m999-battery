@@ -2,16 +2,18 @@ name: Release
 
 # Al subir una etiqueta v* (p. ej. v1.0.1) compila el DMG y lo adjunta a un Release de GitHub.
 # Si el Release ya existe (publicado a mano con su DMG), no hace nada.
+# Ejecución manual (Actions > Release > Run workflow): compila el DMG y lo deja como artefacto, sin publicar.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   dmg:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: ¿Ya existe el Release?
@@ -22,9 +24,18 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
       - name: Compilar DMG (firma ad hoc)
         if: steps.check.outputs.exists != 'true'
-        run: VERSION="${GITHUB_REF_NAME#v}" SIGN_IDENTITY=- ./build.sh --dmg
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF" in refs/tags/*) ;; *) V="0.0.0-test" ;; esac
+          VERSION="$V" SIGN_IDENTITY=- ./build.sh --dmg
       - name: Publicar Release
-        if: steps.check.outputs.exists != 'true'
+        if: startsWith(github.ref, 'refs/tags/') && steps.check.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" build/*.dmg --generate-notes
+      - name: Guardar el DMG como artefacto (ejecución manual)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: M999Battery-dmg
+          path: build/*.dmg
