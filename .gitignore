@@ -1,0 +1,5 @@
+.DS_Store
+M999Battery.app/
+build/
+.venv/
+*.dmg
